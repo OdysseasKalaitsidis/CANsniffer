@@ -103,10 +103,19 @@ class CANsnifferUI:
         
         # Port Selection Area
         tk.Label(tf, text="Port:").pack(side="left")
-        
-        # 1. Port Dropdown
+          # 1. Port Dropdown
         self.cb_ports = ttk.Combobox(tf, width=15)
         self.cb_ports.pack(side="left", padx=2)
+
+        # BAUD rate
+        tk.Label(tf, text="Baud:").pack(side="left", padx=5)
+
+        self.cb_baud = ttk.Combobox(tf, width=10)
+        self.cb_baud['values'] = ["9600", "19200", "38400", "57600", "115200", "250000", "500000", "1000000"]
+        self.cb_baud.current(0)   # default = 9600
+        self.cb_baud.pack(side="left", padx=2)
+                
+      
         
         # 2. Refresh Button
         self.btn_refresh = tk.Button(tf, text="⟳", width=3, command=self.refresh_ports, bg="#f0f0f0")
@@ -172,13 +181,17 @@ class CANsnifferUI:
         # Disable UI to prevent double clicks
         self.btn_con.config(state="disabled")
         
-        self.ser_mgr = SerialManager(port, 9600, self.q)
+        baud = int(self.cb_baud.get())
+        self.ser_mgr = SerialManager(port, baud, self.q)
         if self.ser_mgr.start():
             self.btn_dis.config(state="normal")
             self.cb_ports.config(state="disabled")
             self.btn_refresh.config(state="disabled")
+            self.cb_baud.config(state="disabled")
+
         else:
             self.btn_con.config(state="normal")
+            
             messagebox.showerror("Error", f"Could not open {port}")
 
     def disconnect(self):
@@ -190,6 +203,8 @@ class CANsnifferUI:
         self.btn_dis.config(state="disabled")
         self.cb_ports.config(state="normal")
         self.btn_refresh.config(state="normal")
+        self.cb_baud.config(state="normal")
+
 
     def toggle_sim(self):
         if not self.test_gen:
