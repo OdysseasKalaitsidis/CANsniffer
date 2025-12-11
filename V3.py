@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import serial
-import serial.tools.list_ports  # REQUIRED FOR SEARCHING PORTS
+import serial.tools.list_ports
 import threading, time, queue, datetime, random, struct
 from decoder import DataDecoder
 
@@ -15,13 +15,26 @@ class SerialManager:
 
     def start(self):
         try:
+            # Attempt connection
             self.ser = serial.Serial(self.port, self.baud, timeout=0.1)
             self.running = True
             threading.Thread(target=self.loop, daemon=True).start()
-            self.q.put(("SYS", f"Connected to {self.port}"))
+            self.q.put(("SYS", f"Connected to {self.port} @ {self.baud}"))
             return True
+
+        except ValueError as e:
+            # Occurs if parameters are out of range (e.g. baud -1)
+            self.q.put(("SYS", f"Config Error: Invalid Baud Rate or Parameter ({e})"))
+            return False
+            
+        except serial.SerialException as e:
+            # Occurs if port is busy, not found, or permissions denied
+            self.q.put(("SYS", f"Serial Error: {self.port} unavailable or busy."))
+            return False
+            
         except Exception as e:
-            self.q.put(("SYS", f"Connection Failed: {e}"))
+            # Catch-all for anything else
+            self.q.put(("SYS", f"Critical Error: {e}"))
             return False
 
     def stop(self):
@@ -178,21 +191,35 @@ class CANsnifferUI:
             messagebox.showerror("Error", "Please select a COM port.")
             return
 
+        #  Baud Rate Validation & Fallback ---
+        raw_baud = self.cb_baud.get()
+        try:
+            baud = int(raw_baud)
+            # Optional: Check for realistic range
+            if baud <= 0: raise ValueError("Negative Baud")
+        except ValueError:
+            # Fallback Logic
+            baud = 9600
+            self.cb_baud.set("9600") # Update UI to reflect change
+            self.txt_log.insert(tk.END, f"SYS: Invalid baud '{raw_baud}'. Falling back to 9600.\n")
+            messagebox.showwarning("Baud Rate Warning", 
+                                   f"Invalid Baud Rate '{raw_baud}'.\nDefaulting to 9600.")
+        # -------------------------------------------------
+
         # Disable UI to prevent double clicks
         self.btn_con.config(state="disabled")
         
-        baud = int(self.cb_baud.get())
         self.ser_mgr = SerialManager(port, baud, self.q)
         if self.ser_mgr.start():
             self.btn_dis.config(state="normal")
             self.cb_ports.config(state="disabled")
             self.btn_refresh.config(state="disabled")
             self.cb_baud.config(state="disabled")
-
         else:
             self.btn_con.config(state="normal")
-            
-            messagebox.showerror("Error", f"Could not open {port}")
+            # Error message is already handled inside SerialManager via queue, 
+            # but a popup here helps too.
+            messagebox.showerror("Connection Error", f"Could not open {port}\n(Check log for details)")
 
     def disconnect(self):
         if self.ser_mgr:
